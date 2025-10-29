@@ -146,6 +146,34 @@ if submit:
             ])
             try:
                 model_pipe = load_pickle(str(MODEL_PATH))
+                # quick sanity: if the model returns identical predictions for
+                # two distinct inputs, prefer the baseline model (if present)
+                try:
+                    sample1 = X.copy()
+                    sample2 = X.copy()
+                    # perturb a numeric feature to test sensitivity
+                    sample2.loc[0, 'km_driven'] = int(sample2.loc[0, 'km_driven'] * 1.1 + 100)
+                    p1 = model_pipe.predict(sample1)[0]
+                    p2 = model_pipe.predict(sample2)[0]
+                    if np.isclose(p1, p2, rtol=1e-6, atol=1e-2):
+                        # attempt to fall back to baseline model
+                        baseline = ROOT / 'models' / 'car_price_model.pkl'
+                        if baseline.exists() and str(baseline) != str(MODEL_PATH):
+                            try:
+                                alt = load_pickle(str(baseline))
+                                p_alt1 = alt.predict(sample1)[0]
+                                p_alt2 = alt.predict(sample2)[0]
+                                if not np.isclose(p_alt1, p_alt2, rtol=1e-6, atol=1e-2):
+                                    model_pipe = alt
+                                else:
+                                    st.warning('Model seems to produce identical outputs for different inputs — consider retraining the model with more data.')
+                            except Exception:
+                                st.warning('Fallback model exists but failed to load.')
+                        else:
+                            st.warning('Model seems to produce identical outputs for different inputs — consider retraining the model with more data.')
+                except Exception:
+                    # if the quick sanity check fails for any reason, continue and try prediction
+                    pass
                 pred = model_pipe.predict(X)[0]
                 st.success(f"Predicted resale price: {format_inr(pred)}")
                 st.caption("Estimate — actual market price may vary. Use this as a guide.")
@@ -154,4 +182,3 @@ if submit:
 
 
 st.markdown("---")
-st.caption("Developed by [Your Name] | Data Science Ecosystem Project")
