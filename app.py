@@ -3,11 +3,13 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 import numpy as np
+
 import datetime
 
 from used_car_utils import load_pickle
 import os
-from datetime import datetime
+# Note: avoid `from datetime import datetime` to prevent name shadowing
+# we will use `datetime.datetime` consistently below
 
 ROOT = Path(__file__).resolve().parent
 # prefer tuned model if available
@@ -32,22 +34,61 @@ st.write("Predict resale price in INR (₹) — enter details and submit to get 
 model_label = MODEL_PATH.name if MODEL_PATH.exists() else "(no model found)"
 try:
     mstat = MODEL_PATH.stat()
-    mtime = datetime.fromtimestamp(mstat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    # use module-level datetime to avoid name conflicts
+    mtime = datetime.datetime.fromtimestamp(mstat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
     msize = f"{mstat.st_size:,} bytes"
     st.sidebar.info(f"Model: {model_label}\nLast updated: {mtime}\nSize: {msize}")
+    # also print to stdout so server logs show which model was loaded
+    try:
+        print(f"Using model: {model_label} | Last updated: {mtime} | Size: {msize}")
+    except Exception:
+        pass
 except Exception:
     st.sidebar.info(f"Model: {model_label}")
 
 with open(BRAND_MODELS, "r", encoding="utf-8") as f:
     brand_models = json.load(f)
 
+# Prepare session state for dynamic model options in the UI
+if 'model_options' not in st.session_state:
+    st.session_state['model_options'] = ["-- Select --"]
+    # initialize brand/model keys so callbacks work predictably
+if 'brand' not in st.session_state:
+    st.session_state['brand'] = "-- Select --"
+if 'model' not in st.session_state:
+    st.session_state['model'] = "-- Select --"
+
+
+def _update_model_options():
+    """Callback to update model options when brand changes."""
+    b = st.session_state.get('brand', "-- Select --")
+    models = brand_models.get(b, []) if b and b != "-- Select --" else []
+    opts = ["-- Select --"] + models if models else ["-- Select --"]
+    st.session_state['model_options'] = opts
+    # reset selected model when brand changes
+    st.session_state['model'] = "-- Select --"
+
 # Sidebar for inputs keeps main area clean
+# Put brand/model selectors outside the form because callbacks inside forms
+# are restricted (Streamlit only allows callbacks on the form submit button).
+# Brand selectbox updates session_state['brand'] and triggers model options update
+brand = st.sidebar.selectbox(
+    "Brand",
+    options=["-- Select --"] + sorted(list(brand_models.keys())),
+    key='brand',
+    on_change=_update_model_options,
+)
+
+# Model options are driven by session_state['model_options'] so they change immediately
+model = st.sidebar.selectbox(
+    "Model",
+    options=st.session_state.get('model_options', ["-- Select --"]),
+    key='model',
+)
+
+# Now the rest of the inputs live inside the form so a single submit triggers
 with st.sidebar.form(key="input_form"):
     st.header("Car details")
-    brand = st.selectbox("Brand", options=["-- Select --"] + sorted(list(brand_models.keys())))
-    models = brand_models.get(brand, []) if brand and brand != "-- Select --" else []
-    model = st.selectbox("Model", options=["-- Select --"] + models)
-
     current_year = datetime.datetime.now().year
     year = st.number_input("Year of Manufacture", min_value=1980, max_value=current_year, value=2016)
     km_driven = st.number_input("Kilometers Driven", min_value=0, value=40000, step=500)
