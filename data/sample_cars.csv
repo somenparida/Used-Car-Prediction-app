@@ -1,0 +1,7 @@
+brand,model,year,km_driven,mileage,engine,max_power,owner,fuel_type,transmission,seller_type,selling_price
+Maruti,Swift,2016,45000,23.0,1197,83,1,Petrol,Manual,Individual,350000
+Hyundai,i20,2017,30000,20.0,1197,82,1,Petrol,Manual,Dealer,420000
+Honda,City,2015,60000,18.0,1498,118,2,Petrol,Manual,Individual,520000
+Tata,Nexon,2018,25000,17.0,1199,110,1,Diesel,Manual,Dealer,650000
+Mahindra,Scorpio,2014,90000,13.0,2498,76,2,Diesel,Manual,Individual,400000
+Toyota,Innova,2013,120000,13.0,2494,101,3,Diesel,Manual,Dealer,800000

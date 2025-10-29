@@ -1,0 +1,8 @@
+{
+  "Maruti": ["Swift", "Baleno", "Dzire"],
+  "Hyundai": ["i20", "Verna", "Creta"],
+  "Tata": ["Nexon", "Tiago"],
+  "Honda": ["City", "Amaze"],
+  "Toyota": ["Innova", "Corolla"],
+  "Mahindra": ["Scorpio", "Bolero"]
+}

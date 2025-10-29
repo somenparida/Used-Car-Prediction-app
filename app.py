@@ -1,0 +1,104 @@
+import json
+from pathlib import Path
+import streamlit as st
+import pandas as pd
+import numpy as np
+import datetime
+
+from used_car_utils import load_pickle
+
+ROOT = Path(__file__).resolve().parent
+# prefer tuned model if available
+TUNED_MODEL = ROOT / "models" / "car_price_model_tuned.pkl"
+MODEL_PATH = TUNED_MODEL if TUNED_MODEL.exists() else (ROOT / "models" / "car_price_model.pkl")
+BRAND_MODELS = ROOT / "brand_models.json"
+
+
+def format_inr(amount: float) -> str:
+    try:
+        return f"₹{int(round(amount)):,}"
+    except Exception:
+        return f"₹{amount}"
+
+
+st.set_page_config(page_title="Used Car Price Predictor (India)", layout="centered")
+
+st.title("Used Car Price Predictor — India")
+st.write("Predict resale price in INR (₹) — enter details and submit to get an estimate.")
+
+with open(BRAND_MODELS, "r", encoding="utf-8") as f:
+    brand_models = json.load(f)
+
+# Sidebar for inputs keeps main area clean
+with st.sidebar.form(key="input_form"):
+    st.header("Car details")
+    brand = st.selectbox("Brand", options=["-- Select --"] + sorted(list(brand_models.keys())))
+    models = brand_models.get(brand, []) if brand and brand != "-- Select --" else []
+    model = st.selectbox("Model", options=["-- Select --"] + models)
+
+    current_year = datetime.datetime.now().year
+    year = st.number_input("Year of Manufacture", min_value=1980, max_value=current_year, value=2016)
+    km_driven = st.number_input("Kilometers Driven", min_value=0, value=40000, step=500)
+    mileage = st.number_input("Mileage (kmpl)", min_value=1.0, value=18.0, step=0.1)
+    engine = st.number_input("Engine (CC)", min_value=500, value=1197, step=10)
+    max_power = st.number_input("Max Power (bhp)", min_value=10.0, value=80.0, step=1.0)
+    owner = st.selectbox("Number of Previous Owners", options=[0, 1, 2, 3], index=1)
+    fuel_type = st.selectbox("Fuel Type", options=["Petrol", "Diesel", "CNG", "LPG", "Electric"])
+    transmission = st.selectbox("Transmission", options=["Manual", "Automatic"])
+    seller_type = st.selectbox("Seller Type", options=["Individual", "Dealer", "Trustmark Dealer"])
+
+    submit = st.form_submit_button("Predict Price")
+
+
+def validate_inputs():
+    errors = []
+    if brand == "-- Select --":
+        errors.append("Please select a Brand.")
+    if model == "-- Select --":
+        errors.append("Please select a Model.")
+    if year > datetime.datetime.now().year:
+        errors.append("Year cannot be in the future.")
+    for val, name in [(km_driven, "Kilometers Driven"), (mileage, "Mileage"), (engine, "Engine")]:
+        if val <= 0:
+            errors.append(f"{name} must be positive.")
+    return errors
+
+
+if submit:
+    # If model missing, show an actionable message
+    if not MODEL_PATH.exists():
+        st.error("Model not found. Run `python train.py` to train and save a model first.")
+    else:
+        errs = validate_inputs()
+        if errs:
+            for e in errs:
+                st.error(e)
+        else:
+            # prepare single-row dataframe for prediction
+            age = datetime.datetime.now().year - int(year)
+            X = pd.DataFrame([
+                {
+                    "brand": brand,
+                    "model": model,
+                    "age": age,
+                    "km_driven": int(km_driven),
+                    "mileage": float(mileage),
+                    "engine": int(engine),
+                    "max_power": float(max_power),
+                    "owner": int(owner),
+                    "fuel_type": fuel_type,
+                    "transmission": transmission,
+                    "seller_type": seller_type,
+                }
+            ])
+            try:
+                model_pipe = load_pickle(str(MODEL_PATH))
+                pred = model_pipe.predict(X)[0]
+                st.success(f"Predicted resale price: {format_inr(pred)}")
+                st.caption("Estimate — actual market price may vary. Use this as a guide.")
+            except Exception as e:
+                st.error(f"Prediction failed: {e}")
+
+
+st.markdown("---")
+st.caption("Developed by [Your Name] | Data Science Ecosystem Project")

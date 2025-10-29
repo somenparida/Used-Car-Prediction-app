@@ -1,0 +1,3 @@
+model,rmse,r2,best_params
+RandomForest,215030.05930857666,-36.745246045918364,"{'model__n_estimators': 200, 'model__min_samples_split': 10, 'model__max_depth': 20}"
+XGBoost,199042.9118758063,-31.341293334960938,"{'model__n_estimators': 50, 'model__max_depth': 3, 'model__learning_rate': 0.01}"

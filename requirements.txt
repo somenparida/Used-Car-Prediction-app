@@ -1,0 +1,10 @@
+pandas
+numpy
+scikit-learn
+joblib
+streamlit
+matplotlib
+seaborn
+# xgboost is optional; train.py will use it if available
+xgboost
+pytest
