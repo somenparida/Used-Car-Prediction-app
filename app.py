@@ -12,9 +12,83 @@ import os
 # we will use `datetime.datetime` consistently below
 
 ROOT = Path(__file__).resolve().parent
-# prefer tuned model if available
+# prefer the better-performing model: compare tuned vs baseline on a small
+# validation sample at startup (if both exist) and pick the one with lower RMSE.
 TUNED_MODEL = ROOT / "models" / "car_price_model_tuned.pkl"
-MODEL_PATH = TUNED_MODEL if TUNED_MODEL.exists() else (ROOT / "models" / "car_price_model.pkl")
+BASELINE_MODEL = ROOT / "models" / "car_price_model.pkl"
+
+def _choose_best_model():
+    """Return path to best model among tuned and baseline using a tiny eval set.
+
+    If only one exists, return it. If neither exists, return tuned path (missing)
+    so existing logic shows no model found.
+    """
+    # quick helper to evaluate a pipeline on sample data
+    def _eval_rmse(pipe, df):
+        try:
+            features = [
+                "brand",
+                "model",
+                "age",
+                "km_driven",
+                "mileage",
+                "engine",
+                "max_power",
+                "owner",
+                "fuel_type",
+                "transmission",
+                "seller_type",
+            ]
+            if df is None or df.empty:
+                return float('inf')
+            df2 = df.copy()
+            # ensure age exists
+            if 'age' not in df2.columns and 'year' in df2.columns:
+                df2['age'] = datetime.datetime.now().year - df2['year']
+            X = df2[features].head(100)
+            y = df2['selling_price'].head(100) if 'selling_price' in df2.columns else None
+            preds = pipe.predict(X)
+            if y is None:
+                # no ground truth available; return variance of predictions as proxy
+                return float(((preds - preds.mean()) ** 2).mean()) ** 0.5
+            from sklearn.metrics import mean_squared_error
+            return mean_squared_error(y, preds) ** 0.5
+        except Exception:
+            return float('inf')
+
+    # load a small sample dataframe from cleaned or sample data
+    sample_df = None
+    try:
+        sample_path = ROOT / 'data' / 'cleaned_cars.csv'
+        if not sample_path.exists():
+            sample_path = ROOT / 'data' / 'sample_cars.csv'
+        if sample_path.exists():
+            import pandas as _pd
+
+            sample_df = _pd.read_csv(sample_path)
+    except Exception:
+        sample_df = None
+
+    tuned_exists = TUNED_MODEL.exists()
+    base_exists = BASELINE_MODEL.exists()
+    if tuned_exists and base_exists:
+        try:
+            tuned_pipe = load_pickle(str(TUNED_MODEL))
+            base_pipe = load_pickle(str(BASELINE_MODEL))
+            tuned_rmse = _eval_rmse(tuned_pipe, sample_df)
+            base_rmse = _eval_rmse(base_pipe, sample_df)
+            # smaller is better
+            return TUNED_MODEL if tuned_rmse <= base_rmse else BASELINE_MODEL
+        except Exception:
+            return TUNED_MODEL
+    if tuned_exists:
+        return TUNED_MODEL
+    if base_exists:
+        return BASELINE_MODEL
+    return TUNED_MODEL
+
+
+MODEL_PATH = _choose_best_model()
 BRAND_MODELS = ROOT / "brand_models.json"
 
 
