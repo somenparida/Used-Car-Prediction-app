@@ -6,6 +6,8 @@ import numpy as np
 import datetime
 
 from used_car_utils import load_pickle
+import os
+from datetime import datetime
 
 ROOT = Path(__file__).resolve().parent
 # prefer tuned model if available
@@ -25,6 +27,16 @@ st.set_page_config(page_title="Used Car Price Predictor (India)", layout="center
 
 st.title("Used Car Price Predictor — India")
 st.write("Predict resale price in INR (₹) — enter details and submit to get an estimate.")
+
+# Show which model file is being used
+model_label = MODEL_PATH.name if MODEL_PATH.exists() else "(no model found)"
+try:
+    mstat = MODEL_PATH.stat()
+    mtime = datetime.fromtimestamp(mstat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    msize = f"{mstat.st_size:,} bytes"
+    st.sidebar.info(f"Model: {model_label}\nLast updated: {mtime}\nSize: {msize}")
+except Exception:
+    st.sidebar.info(f"Model: {model_label}")
 
 with open(BRAND_MODELS, "r", encoding="utf-8") as f:
     brand_models = json.load(f)
